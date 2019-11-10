@@ -172,6 +172,4 @@ scatter(next_state(1), next_state(2), 8, 'g', 'filled')
 
 %value = eval_u(g,data(:,:,:,end), state);
 
-% Made some changezzz
-
 end
