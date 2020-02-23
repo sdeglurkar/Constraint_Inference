@@ -24,7 +24,7 @@ d2 = y0;
 c1 = vx0;
 c2 = vy0;
 
-a1 = 2 * (x0 - xf) + T * (vx0 + vxf);
+a1 = 2 * (x0 - xf) + T * (vx0 + 0.vxf);
 a2 = 2 * (y0 - yf) + T * (vy0 + vyf);
 b1 = ( xf - T^(3) * (2*(x0 - xf) + T*(vx0 + vxf)) - T*vx0 - x0 ) / T^(2);
 b2 = ( yf - T^(3) * (2*(y0 - yf) + T*(vy0 + vyf)) - T*vy0 - y0 ) / T^(2);

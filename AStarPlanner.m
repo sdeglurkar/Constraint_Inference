@@ -137,6 +137,8 @@ classdef AStarPlanner
             ys = flip(ys);
             thetas = flip(thetas);
             times = flip(times);
+            
+            disp("Cost of path: " + ngoal.cost)
         
         end
         

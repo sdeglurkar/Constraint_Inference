@@ -1,7 +1,7 @@
 function main()
 
 planner = AStarPlanner([4, -2, pi/2], [-5, -5, -pi], [5, 5, pi], 1, 1, 0.5);
-[xs, ys, thetas, times] = planner.planTraj([-4, 3, pi/2]);
+[xs, ys, thetas, times] = planner.planTraj([-4, 3, pi]);
 close all
 scatter(xs, ys, 'filled')
 axis([-5, 5, -5, 5])

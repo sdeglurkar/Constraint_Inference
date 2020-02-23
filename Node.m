@@ -4,7 +4,7 @@ classdef Node
         y
         theta
         cost
-        pind
+        pind    %Pointer to parent
         tstamp
     end
     
