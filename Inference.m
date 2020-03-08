@@ -20,7 +20,7 @@ classdef Inference
             obj.robot_state = robot_state;
             
             obj.beta = 10;
-            obj.thetas = obj.beta * obj.generateThetas(); 
+            obj.thetas = obj.beta * obj.generateThetas();
             obj.theta_prior = ones(1, length(obj.thetas))/length(obj.thetas);  % Uniform prior
 %             obj.state_prior = ones(1, obj.grid_size * obj.grid_size)/(obj.grid_size^2);
 %             obj.state_prior = reshape(obj.state_prior, [obj.grid_size, obj.grid_size]);
