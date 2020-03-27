@@ -44,7 +44,7 @@ class ValueIteration:
                         if x_prime == 0:
                             q_value[i][j][k] = np.nan
                             continue
-                        r = self.reward(x, u, x_prime)
+                        r = self.reward(x, u, x_prime, final_value)
                         # Here is the q-value iteration update
                         q_value[i][j][k] = r + discount * old_value[x_prime[0]][x_prime[1]]
                 
@@ -73,8 +73,17 @@ class ValueIteration:
         return value, q_value, optimal_policies
 
     
-    def reward(self, x, u, x_prime):
-        return 0
+    def reward(self, x, u, x_prime, final_value):
+        [row, col] = np.nonzero(final_value)
+        min_dist_from_obs = 100000
+        for i in range(len(row)):
+            x = row[i]
+            y = col[i]
+            dist = np.sqrt((x - x_prime[0])**2 + (y - x_prime[1])**2)
+            if dist < min_dist_from_obs:
+                min_dist_from_obs = dist
+
+        return 0 #min_dist_from_obs
 
 
     def dynamics(self, x, u):

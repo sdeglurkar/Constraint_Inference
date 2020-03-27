@@ -78,14 +78,48 @@ class Inference:
         return exp_q_vals[policy_index]
 
 
-    def state_given_theta(self, theta, state_row, state_col):
-        if theta[state_row][state_col] == 0:
-            return 0
-        else:
-            nonzero_theta = theta[theta != 0]
-            cardinality = len(nonzero_theta)
-            return 1/cardinality
+    # def state_given_theta(self, theta, state_row, state_col):
+    #     if theta[state_row][state_col] == 0:
+    #         return 0
+    #     else:
+    #         nonzero_theta = theta[theta != 0]
+    #         cardinality = len(nonzero_theta)
+    #         return 1/cardinality
 
+    def state_given_theta(self, theta, state_row, state_col, binary_val):
+        if theta[state_row][state_col] == binary_val:
+            return 1
+        else:
+            return 0
+
+
+    # def exact_inference(self, policy_index, prior):
+    #     """
+    #     The prior should be a list of probabilities in the same order
+    #     that generate_thetas() generates thetas; e.g. if the thetas
+    #     are generated from [0, 1, 2, 3] (2 grid cells), prior[1] should be
+    #     the probability that the theta is [[0, 0], [0, 1]], and so on.
+    #     """
+    #     t0 = time.time()
+    #
+    #     thetas = self.generate_thetas()
+    #     dstb = np.zeros((self.grid_size[0], self.grid_size[1]))
+    #     for i in range(self.grid_size[0]):
+    #         for j in range(self.grid_size[1]):
+    #             for k in range(len(thetas)):
+    #                 theta = thetas[k]
+    #                 state_row = i
+    #                 state_col = j
+    #                 numerator = self.state_given_theta(theta, state_row, state_col) * \
+    #                             self.human_model(policy_index, theta) * prior[k]
+    #                 if not np.isnan(numerator):
+    #                     dstb[state_row][state_col] += numerator
+    #
+    #     dstb /= sum(sum(dstb))
+    #
+    #     t1 = time.time()
+    #
+    #     return dstb, t1-t0
 
     def exact_inference(self, policy_index, prior):
         """
@@ -97,23 +131,77 @@ class Inference:
         t0 = time.time()
 
         thetas = self.generate_thetas()
-        dstb = np.zeros((self.grid_size[0], self.grid_size[1]))
+        dstb_0 = np.zeros((self.grid_size[0], self.grid_size[1]))
+        dstb_1 = np.zeros((self.grid_size[0], self.grid_size[1]))
         for i in range(self.grid_size[0]):
             for j in range(self.grid_size[1]):
                 for k in range(len(thetas)):
                     theta = thetas[k]
                     state_row = i
                     state_col = j
-                    numerator = self.state_given_theta(theta, state_row, state_col) * \
-                                self.human_model(policy_index, theta) * prior[k]
-                    if not np.isnan(numerator):
-                        dstb[state_row][state_col] += numerator
+                    human_model_prob = self.human_model(policy_index, theta)
+                    numerator_1 = self.state_given_theta(theta, state_row, state_col, 1) * \
+                                human_model_prob * prior[k]
+                    numerator_0 = self.state_given_theta(theta, state_row, state_col, 0) * \
+                                  human_model_prob * prior[k]
+                    if not np.isnan(numerator_1):
+                        dstb_1[state_row][state_col] += numerator_1
+                    if not np.isnan(numerator_0):
+                        dstb_0[state_row][state_col] += numerator_0
 
-        dstb /= sum(sum(dstb))
+        denom = dstb_1 + dstb_0
+        dstb = dstb_1/denom
 
         t1 = time.time()
 
         return dstb, t1-t0
+
+
+    # def sampling_inference(self, policy_index, num_samples, prior):
+    #     """
+    #     This function performs likelihood weighting.
+    #
+    #     The prior should be a list of probabilities in the same order
+    #     that generate_thetas() generates thetas; e.g. if the thetas
+    #     are generated from [0, 1, 2, 3] (2 grid cells), prior[1] should be
+    #     the probability that the theta is [[0, 0], [0, 1]], and so on.
+    #     """
+    #     t0 = time.time()
+    #
+    #     dstb = np.zeros((self.grid_size[0], self.grid_size[1]))
+    #     samples_list = np.zeros((num_samples, 3)) # Each row is a sample of (theta, state_row, state_col)
+    #     weights = np.zeros(num_samples)
+    #
+    #     # Generate samples and weights
+    #     for i in range(num_samples):
+    #         theta, theta_index = self.sample_thetas(prior)
+    #         [row, col] = np.nonzero(theta)
+    #         if len(row) > 0:
+    #             samples_list[i, 0] = theta_index
+    #             # Sample from state_given_theta (uniform)
+    #             rand_index = random.randint(0, len(row) - 1)
+    #             samples_list[i, 1] = row[rand_index]
+    #             samples_list[i, 2] = col[rand_index]
+    #             weights[i] = self.human_model(policy_index, theta)
+    #         else:
+    #             # This sample will just have 0 probability
+    #             samples_list[i, 0] = theta_index
+    #             samples_list[i, 1] = samples_list[i, 2] = -1
+    #
+    #     # Weighted sum of samples
+    #     for i in range(self.grid_size[0]):
+    #         for j in range(self.grid_size[1]):
+    #             for k in range(num_samples):
+    #                 if samples_list[k, 1] == i and samples_list[k, 2] == j:
+    #                     if not np.isnan(weights[k]):
+    #                         dstb[i][j] += weights[k]
+    #
+    #
+    #     dstb /= sum(sum(dstb))
+    #
+    #     t1 = time.time()
+    #
+    #     return dstb, t1-t0
 
 
     def sampling_inference(self, policy_index, num_samples, prior):
@@ -128,47 +216,32 @@ class Inference:
         t0 = time.time()
 
         dstb = np.zeros((self.grid_size[0], self.grid_size[1]))
-        samples_list = np.zeros((num_samples, 3)) # Each row is a sample of (theta, state_row, state_col)
+        dstb_denom = np.zeros((self.grid_size[0], self.grid_size[1]))
+        samples_list = np.zeros((num_samples, self.grid_size[0], self.grid_size[1])) # Each sample is a theta
         weights = np.zeros(num_samples)
 
         # Generate samples and weights
         for i in range(num_samples):
             theta, theta_index = self.sample_thetas(prior)
-            [row, col] = np.nonzero(theta)
-            if len(row) > 0:
-                samples_list[i, 0] = theta_index
-                # Sample from state_given_theta (uniform)
-                rand_index = random.randint(0, len(row) - 1)
-                samples_list[i, 1] = row[rand_index]
-                samples_list[i, 2] = col[rand_index]
-                weights[i] = self.human_model(policy_index, theta)
-            else:
-                # This sample will just have 0 probability
-                samples_list[i, 0] = theta_index
-                samples_list[i, 1] = samples_list[i, 2] = -1
+            samples_list[i] = theta
+            weights[i] = self.human_model(policy_index, theta)
 
         # Weighted sum of samples
         for i in range(self.grid_size[0]):
             for j in range(self.grid_size[1]):
                 for k in range(num_samples):
-                    if samples_list[k, 1] == i and samples_list[k, 2] == j:
-                        if not np.isnan(weights[k]):
+                    theta = samples_list[k]
+                    if theta[i][j] == 1 and not np.isnan(weights[k]):
                             dstb[i][j] += weights[k]
+                            dstb_denom[i][j] += weights[k]
+                    if theta[i][j] == 0 and not np.isnan(weights[k]):
+                            dstb_denom[i][j] += weights[k]
 
 
-        dstb /= sum(sum(dstb))
+        dstb /= dstb_denom
 
         t1 = time.time()
 
         return dstb, t1-t0
 
-
-if __name__ == "__main__":
-    grid_size = [3, 3]
-    infer = Inference(grid_size, discount=0.9, robot_state=[1, 1], beta=1)
-    n = grid_size[0] * grid_size[1]
-    max_number_represented = 2 ** n - 1
-    prior = np.ones(max_number_represented + 1)/(max_number_represented + 1) # Uniform prior
-    print(infer.exact_inference(policy_index=0, prior=prior))
-    print(infer.sampling_inference(policy_index=0, num_samples=300, prior=prior))
 
