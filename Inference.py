@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import random
 import time
@@ -20,7 +21,7 @@ class Inference:
         self.policies = ["north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest", "exit"]
 
 
-    def generate_thetas(self):
+    def generate_all_thetas(self):
         n = self.grid_size[0] * self.grid_size[1]
         max_number_represented = 2 ** n - 1
         numbers = range(max_number_represented + 1)
@@ -32,6 +33,31 @@ class Inference:
             list_binary_arrays.append(np.reshape(list_binary_strings[i], [self.grid_size[0], self.grid_size[1]]))
 
         return np.array(list_binary_arrays)
+
+
+    def generate_parametrized_thetas(self, size_obstacle):
+        if size_obstacle >= min(self.grid_size[0], self.grid_size[1]):
+            print("Obstacle cannot be larger than grid!")
+            return
+        obs = np.ones((size_obstacle, size_obstacle))
+        zeros = np.zeros((size_obstacle, self.grid_size[1] - size_obstacle))
+        block_row = np.hstack([obs, zeros])
+        rolls = [block_row]
+        for i in range((self.grid_size[1] + 1 - size_obstacle) - 1):
+            block_row = np.roll(block_row, 1)
+            rolls.append(block_row)
+
+        zeros = np.zeros((self.grid_size[0] - size_obstacle, self.grid_size[1]))
+        preliminary_thetas = [np.vstack([roll, zeros]) for roll in rolls]
+        thetas = []
+        for i in range(len(preliminary_thetas)):
+            theta = preliminary_thetas[i]
+            thetas.append(theta)
+            for j in range((self.grid_size[0] + 1 - size_obstacle) - 1):
+                theta = np.roll(theta, 1, axis=0)
+                thetas.append(theta)
+
+        return thetas
 
 
     def sample_thetas(self, prior):
@@ -78,48 +104,12 @@ class Inference:
         return exp_q_vals[policy_index]
 
 
-    # def state_given_theta(self, theta, state_row, state_col):
-    #     if theta[state_row][state_col] == 0:
-    #         return 0
-    #     else:
-    #         nonzero_theta = theta[theta != 0]
-    #         cardinality = len(nonzero_theta)
-    #         return 1/cardinality
-
     def state_given_theta(self, theta, state_row, state_col, binary_val):
         if theta[state_row][state_col] == binary_val:
             return 1
         else:
             return 0
 
-
-    # def exact_inference(self, policy_index, prior):
-    #     """
-    #     The prior should be a list of probabilities in the same order
-    #     that generate_thetas() generates thetas; e.g. if the thetas
-    #     are generated from [0, 1, 2, 3] (2 grid cells), prior[1] should be
-    #     the probability that the theta is [[0, 0], [0, 1]], and so on.
-    #     """
-    #     t0 = time.time()
-    #
-    #     thetas = self.generate_thetas()
-    #     dstb = np.zeros((self.grid_size[0], self.grid_size[1]))
-    #     for i in range(self.grid_size[0]):
-    #         for j in range(self.grid_size[1]):
-    #             for k in range(len(thetas)):
-    #                 theta = thetas[k]
-    #                 state_row = i
-    #                 state_col = j
-    #                 numerator = self.state_given_theta(theta, state_row, state_col) * \
-    #                             self.human_model(policy_index, theta) * prior[k]
-    #                 if not np.isnan(numerator):
-    #                     dstb[state_row][state_col] += numerator
-    #
-    #     dstb /= sum(sum(dstb))
-    #
-    #     t1 = time.time()
-    #
-    #     return dstb, t1-t0
 
     def exact_inference(self, policy_index, prior):
         """
@@ -130,7 +120,11 @@ class Inference:
         """
         t0 = time.time()
 
-        thetas = self.generate_thetas()
+        thetas = []
+        #thetas = self.generate_all_thetas()
+        #thetas = self.generate_parametrized_thetas(size_obstacle=1)
+        thetas.extend(self.generate_parametrized_thetas(size_obstacle=2))
+        thetas.extend(self.generate_parametrized_thetas(size_obstacle=3))
         dstb_0 = np.zeros((self.grid_size[0], self.grid_size[1]))
         dstb_1 = np.zeros((self.grid_size[0], self.grid_size[1]))
         for i in range(self.grid_size[0]):
@@ -140,9 +134,9 @@ class Inference:
                     state_row = i
                     state_col = j
                     human_model_prob = self.human_model(policy_index, theta)
-                    numerator_1 = self.state_given_theta(theta, state_row, state_col, 1) * \
+                    numerator_1 = self.state_given_theta(theta, state_row, state_col, binary_val=1) * \
                                 human_model_prob * prior[k]
-                    numerator_0 = self.state_given_theta(theta, state_row, state_col, 0) * \
+                    numerator_0 = self.state_given_theta(theta, state_row, state_col, binary_val=0) * \
                                   human_model_prob * prior[k]
                     if not np.isnan(numerator_1):
                         dstb_1[state_row][state_col] += numerator_1
@@ -153,6 +147,11 @@ class Inference:
         dstb = dstb_1/denom
 
         t1 = time.time()
+
+        plt.imshow(dstb, cmap='hot')
+        plt.colorbar()
+        plt.scatter(self.robot_state[0], self.robot_state[1], s=50, c='b')
+        plt.show()
 
         return dstb, t1-t0
 

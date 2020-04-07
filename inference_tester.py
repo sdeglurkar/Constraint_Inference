@@ -2,13 +2,13 @@ import numpy as np
 from Inference import Inference
 import time
 
-grid_size = [3, 3]
-infer = Inference(grid_size, discount=0.9, robot_state=[2, 0], beta=70)
+grid_size = [5, 5]
+infer = Inference(grid_size, discount=0.9, robot_state=[1, 1], beta=70)
 n = grid_size[0] * grid_size[1]
 max_number_represented = 2 ** n - 1
 prior = np.ones(max_number_represented + 1)/(max_number_represented + 1) # Uniform prior
-print(infer.exact_inference(policy_index=0, prior=prior))
-print(infer.sampling_inference(policy_index=0, num_samples=300, prior=prior))
+print(infer.exact_inference(policy_index=3, prior=prior))
+#print(infer.sampling_inference(policy_index=0, num_samples=300, prior=prior))
 
 
 # t0 = time.time()
