@@ -8,6 +8,7 @@ final_value[2][1] = -10
 discount = 0.9
 
 valiter = ValueIterationHumanRobot(grid_size)
-value, q_value, optimal_policies = valiter.value_iteration(final_value, discount)
+value, q_value, optimal_policies_human, optimal_policies_robot = valiter.value_iteration(final_value, discount)
 print(value)
-print(optimal_policies)
+print(optimal_policies_human)
+print(optimal_policies_robot)

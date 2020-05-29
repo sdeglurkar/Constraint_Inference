@@ -7,7 +7,9 @@ Value iteration for an MDP with deterministic dynamics
 class ValueIteration:
 
     def __init__(self, grid_size):
-        self.policies = ["north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest", "exit"]
+        #self.policies = ["north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest", "exit"]
+        self.policies = ["north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest", "none",
+                         "exit"]
         self.grid_size = grid_size
 
 
@@ -27,7 +29,7 @@ class ValueIteration:
                 for j in range(self.grid_size[1]):
                     for k in range(len(self.policies)):
                         # Checks for goal/obstacle states
-                        if k == len(self.policies) - 1:
+                        if self.policies[k] is "exit":
                             if final_value[i][j] != 0:
                                 r = old_value[i][j]
                                 q_value[i][j][k] = r
@@ -74,16 +76,20 @@ class ValueIteration:
 
     
     def reward(self, x, u, x_prime, final_value):
-        [row, col] = np.nonzero(final_value)
-        min_dist_from_obs = 100000
-        for i in range(len(row)):
-            x = row[i]
-            y = col[i]
-            dist = np.sqrt((x - x_prime[0])**2 + (y - x_prime[1])**2)
-            if dist < min_dist_from_obs:
-                min_dist_from_obs = dist
+        r = 0
 
-        return 0 #min_dist_from_obs
+        if u is not "none" and u is not "exit":
+            if u is "northeast" or \
+                    u is "northwest" or \
+                    u is "southeast" or \
+                    u is "southwest":
+
+                r = -np.sqrt(2)
+
+            else:
+                r = -1
+
+        return r
 
 
     def dynamics(self, x, u):
@@ -106,6 +112,8 @@ class ValueIteration:
             x_prime = [x[0] + 1, x[1] - 1]
         elif u is "exit":
             x_prime = 0
+        elif u is "none":
+            x_prime = x
 
         if x_prime != 0 and \
             (x_prime[0] < 0 or x_prime[1] < 0 or x_prime[0] >= self.grid_size[0] or x_prime[1] >= self.grid_size[1]):

@@ -7,7 +7,7 @@ from value_iteration_human_robot import ValueIterationHumanRobot
 
 class Inference:
 
-    def __init__(self, grid_size, discount, robot_state, beta, robot_goal):
+    def __init__(self, grid_size, discount, robot_state, beta, robot_goal, robot_action, obs_sizes):
         """
         :param grid_size: [num_rows, num_cols]
         :param discount: Discount factor for value iteration
@@ -22,11 +22,21 @@ class Inference:
         self.robot_goal = robot_goal
         if len(self.robot_goal) == 0:
             self.no_goal = True
+        else:
+            self.no_goal = False
 
         self.robot_policies = ["north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest", "exit"]
         self.human_policies = ["north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest", "none", "exit"]
 
-        self.prior = []
+        self.robot_action = robot_action
+
+        self.thetas = []
+
+        for obs_size in obs_sizes:
+            self.thetas.extend(self.generate_parametrized_thetas(size_obstacle=obs_size))
+
+        self.prior = np.ones(len(self.thetas))/len(self.thetas)
+
 
 
     def generate_all_thetas(self):
@@ -39,8 +49,6 @@ class Inference:
         for i in range(len(numbers)):
             list_binary_strings[i] = np.array([int(elem) for elem in list_binary_strings[i]])
             list_binary_arrays.append(np.reshape(list_binary_strings[i], [self.grid_size[0], self.grid_size[1]]))
-
-        self.prior = np.ones(len(list_binary_arrays))/len(list_binary_arrays)
 
         return np.array(list_binary_arrays)
 
@@ -83,12 +91,6 @@ class Inference:
                         theta[self.robot_goal[0]][self.robot_goal[1]] = 0
                         theta = -theta
 
-        if len(self.prior) == 0:
-            self.prior = np.ones(len(thetas))/len(thetas)
-        else:
-            curr_len = len(self.prior)
-            self.prior = np.ones(len(thetas) + curr_len) / (len(thetas) + curr_len)
-
         return thetas
 
 
@@ -100,15 +102,79 @@ class Inference:
         :return: Probability human gives the policy given theta, which is a softmax on
         the optimal policy given by value iteration
         """
+        if self.no_goal:
+            if self.robot_action == -1:
+                return self.human_model_no_goal(policy_index, theta, final_value_param)
+            else:
+                return self.human_model_nogoal_uR(policy_index, theta, final_value_param)
+        else:
+            if self.robot_action == -1:
+                return self.human_model_goal(policy_index, theta, final_value_param)
+            else:
+                return self.human_model_goal_uR(policy_index, theta, final_value_param)
+
+
+    def human_model_no_goal(self, policy_index, theta, final_value_param):
         valiter = ValueIteration(self.grid_size)
         final_value = theta * final_value_param
         value, q_value, optimal_policies = valiter.value_iteration(final_value, self.discount)
         exp_q_vals = np.zeros(len(valiter.policies))
         for i in range(len(valiter.policies)):
-            if self.no_goal:
-                exp_q_vals[i] = np.exp(-self.beta * q_value[self.robot_state[0], self.robot_state[1], i])
-            else:
-                exp_q_vals[i] = np.exp(self.beta * q_value[self.robot_state[0], self.robot_state[1], i])
+            exp_q_vals[i] = np.exp(-self.beta * q_value[self.robot_state[0], self.robot_state[1], i])
+
+        sum_exp = 0
+        for i in range(len(exp_q_vals)):
+            if not np.isnan(exp_q_vals[i]):
+                sum_exp += exp_q_vals[i]
+
+        exp_q_vals /= sum_exp
+
+        return exp_q_vals[policy_index]
+
+
+    def human_model_goal(self, policy_index, theta, final_value_param):
+        valiter = ValueIteration(self.grid_size)
+        final_value = theta * final_value_param
+        value, q_value, optimal_policies = valiter.value_iteration(final_value, self.discount)
+        exp_q_vals = np.zeros(len(valiter.policies))
+        for i in range(len(valiter.policies)):
+            exp_q_vals[i] = np.exp(self.beta * q_value[self.robot_state[0], self.robot_state[1], i])
+
+        sum_exp = 0
+        for i in range(len(exp_q_vals)):
+            if not np.isnan(exp_q_vals[i]):
+                sum_exp += exp_q_vals[i]
+
+        exp_q_vals /= sum_exp
+
+        return exp_q_vals[policy_index]
+
+
+    def human_model_nogoal_uR(self, policy_index, theta, final_value_param):
+        valiter = ValueIterationHumanRobot(self.grid_size)
+        final_value = theta * final_value_param
+        value, q_value, optimal_policies_human, optimal_policies_robot = valiter.value_iteration(final_value, self.discount)
+        exp_q_vals = np.zeros(len(valiter.human_policies))
+        for i in range(len(valiter.human_policies)):
+            exp_q_vals[i] = np.exp(-self.beta * q_value[self.robot_state[0], self.robot_state[1], i, self.robot_action])
+
+        sum_exp = 0
+        for i in range(len(exp_q_vals)):
+            if not np.isnan(exp_q_vals[i]):
+                sum_exp += exp_q_vals[i]
+
+        exp_q_vals /= sum_exp
+
+        return exp_q_vals[policy_index]
+
+
+    def human_model_goal_uR(self, policy_index, theta, final_value_param):
+        valiter = ValueIterationHumanRobot(self.grid_size)
+        final_value = theta * final_value_param
+        value, q_value, optimal_policies_human, optimal_policies_robot = valiter.value_iteration(final_value, self.discount)
+        exp_q_vals = np.zeros(len(valiter.human_policies))
+        for i in range(len(valiter.human_policies)):
+            exp_q_vals[i] = np.exp(self.beta * q_value[self.robot_state[0], self.robot_state[1], i, self.robot_action])
 
         sum_exp = 0
         for i in range(len(exp_q_vals)):
@@ -129,16 +195,9 @@ class Inference:
         """
         t0 = time.time()
 
-        thetas = []
-        #thetas.extend(self.generate_all_thetas())
-        thetas.extend(self.generate_parametrized_thetas(size_obstacle=[1, 1]))
-        #thetas.extend(self.generate_parametrized_thetas(size_obstacle=[1, 2]))
-        #thetas.extend(self.generate_parametrized_thetas(size_obstacle=[2, 1]))
-        thetas.extend(self.generate_parametrized_thetas(size_obstacle=[2, 2]))
-        #thetas.extend(self.generate_parametrized_thetas(size_obstacle=[3, 3]))
-        dstb = np.zeros(len(thetas))
-        for i in range(len(thetas)):
-            theta = thetas[i]
+        dstb = np.zeros(len(self.thetas))
+        for i in range(len(self.thetas)):
+            theta = self.thetas[i]
             theta = theta.astype('float')
             human_model_prob = self.human_model(policy_index, theta)
             dstb[i] = human_model_prob * self.prior[i]
@@ -147,38 +206,43 @@ class Inference:
         for i in range(len(dstb)):
             if not np.isnan(dstb[i]):
                 sum_dstb += dstb[i]
+            else:
+                dstb[i] = 0
 
         dstb /= sum_dstb
 
         t1 = time.time()
 
-        self.visualizations(dstb, thetas)
+        self.visualizations(dstb)
+
+        self.prior = dstb
 
         return dstb, t1-t0
 
 
-    def visualizations(self, dstb, thetas):
+    def visualizations(self, dstb):
         dstb_states = np.zeros((self.grid_size[0], self.grid_size[1]))
         for i in range(self.grid_size[0]):
             for j in range(self.grid_size[1]):
                 max_prob = 0
-                for k in range(len(thetas)):
-                    theta = thetas[k]
+                for k in range(len(self.thetas)):
+                    theta = self.thetas[k]
                     if self.no_goal:
                         val = 1
                     else:
                         val = -1
                     if theta[i][j] == val:
+                        #max_prob += dstb[k]
                         if dstb[k] > max_prob:
                             max_prob = dstb[k]
                 dstb_states[i][j] = max_prob
 
         for i in range(len(dstb)):
             if self.no_goal:
-                plt.imshow(thetas[i], cmap='hot')
+                plt.imshow(self.thetas[i], cmap='hot')
             else:
-                ind = np.where(thetas[i] == 1)
-                theta_show = np.copy(thetas[i])
+                ind = np.where(self.thetas[i] == 1)
+                theta_show = np.copy(self.thetas[i])
                 theta_show[ind[0], ind[1]] = 0
                 theta_show = -theta_show
                 plt.imshow(theta_show, cmap='hot')
@@ -188,7 +252,7 @@ class Inference:
             plt.title(dstb[i])
             plt.show()
 
-        plt.bar(range(len(thetas)), dstb)
+        plt.bar(range(len(self.thetas)), dstb)
         plt.title("Belief over Theta")
         plt.ylabel("P(theta|u_H)")
         plt.show()
@@ -197,4 +261,7 @@ class Inference:
         plt.colorbar()
         plt.scatter(self.robot_state[1], self.robot_state[0], s=50, c='b')
         plt.show()
+
+
+
 
