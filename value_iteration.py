@@ -89,7 +89,7 @@ class ValueIteration:
             else:
                 r = -1
 
-        return r
+        return 0 #r
 
 
     def dynamics(self, x, u):

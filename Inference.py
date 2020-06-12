@@ -13,6 +13,9 @@ class Inference:
         :param discount: Discount factor for value iteration
         :param robot_state: Where is the robot currently
         :param beta: Human model "rationality" parameter
+        :param robot_goal: Where is the robot going, by the human's knowledge
+        :param robot_action: What is the robot's next action, as the human predicts
+        :param obs_sizes: Dimensions of obstacles to be included in the inference
         """
         self.grid_size = grid_size
         self.discount = discount
@@ -32,6 +35,7 @@ class Inference:
 
         self.thetas = []
 
+        self.obs_sizes = obs_sizes
         for obs_size in obs_sizes:
             self.thetas.extend(self.generate_parametrized_thetas(size_obstacle=obs_size))
 
@@ -91,6 +95,20 @@ class Inference:
                         theta[self.robot_goal[0]][self.robot_goal[1]] = 0
                         theta = -theta
 
+        t = np.zeros((self.grid_size[0], self.grid_size[1]))
+        t[1, 1] = -1
+        t[2, 2] = -1
+        t[self.robot_goal[0], self.robot_goal[1]] = 1
+        thetas.append(t)
+
+        t = np.zeros((self.grid_size[0], self.grid_size[1]))
+        t[1, 1] = -1
+        t[2, 2] = -1
+        t[1, 2] = -1
+        t[2, 1] = -1
+        t[self.robot_goal[0], self.robot_goal[1]] = 1
+        thetas.append(t)
+
         return thetas
 
 
@@ -112,6 +130,7 @@ class Inference:
                 return self.human_model_goal(policy_index, theta, final_value_param)
             else:
                 return self.human_model_goal_uR(policy_index, theta, final_value_param)
+                #return self.human_model_goal_uR_alternate(policy_index, theta, final_value_param)
 
 
     def human_model_no_goal(self, policy_index, theta, final_value_param):
@@ -186,13 +205,27 @@ class Inference:
         return exp_q_vals[policy_index]
 
 
-    def exact_inference(self, policy_index):
-        """
-        The prior should be a list of probabilities in the same order
-        that generate_thetas() generates thetas; e.g. if the thetas
-        are generated from [0, 1, 2, 3] (2 grid cells), prior[1] should be
-        the probability that the theta is [[0, 0], [0, 1]], and so on.
-        """
+    def human_model_goal_uR_alternate(self, policy_index, theta, final_value_param):
+        valiter = ValueIteration(self.grid_size)
+        final_value = theta * final_value_param
+        value, q_value, optimal_policies = valiter.value_iteration(final_value, self.discount)
+        exp_q_vals = np.zeros(len(valiter.policies))
+        for i in range(len(valiter.policies)):
+            diff_q = q_value[self.robot_state[0], self.robot_state[1], i] - \
+                     q_value[self.robot_state[0], self.robot_state[1], self.robot_action]
+            exp_q_vals[i] = np.exp(self.beta * diff_q)
+
+        sum_exp = 0
+        for i in range(len(exp_q_vals)):
+            if not np.isnan(exp_q_vals[i]):
+                sum_exp += exp_q_vals[i]
+
+        exp_q_vals /= sum_exp
+
+        return exp_q_vals[policy_index]
+
+
+    def exact_inference(self, policy_index, visualize=True):
         t0 = time.time()
 
         dstb = np.zeros(len(self.thetas))
@@ -213,7 +246,8 @@ class Inference:
 
         t1 = time.time()
 
-        self.visualizations(dstb)
+        if visualize:
+            self.visualizations(dstb)
 
         self.prior = dstb
 
@@ -237,30 +271,69 @@ class Inference:
                             max_prob = dstb[k]
                 dstb_states[i][j] = max_prob
 
-        for i in range(len(dstb)):
-            if self.no_goal:
-                plt.imshow(self.thetas[i], cmap='hot')
-            else:
-                ind = np.where(self.thetas[i] == 1)
-                theta_show = np.copy(self.thetas[i])
-                theta_show[ind[0], ind[1]] = 0
-                theta_show = -theta_show
-                plt.imshow(theta_show, cmap='hot')
-
-            plt.colorbar()
-            plt.scatter(self.robot_state[1], self.robot_state[0], s=50, c='b')
-            plt.title(dstb[i])
-            plt.show()
-
+        # Belief bar chart
+        plt.figure()
         plt.bar(range(len(self.thetas)), dstb)
         plt.title("Belief over Theta")
         plt.ylabel("P(theta|u_H)")
-        plt.show()
 
+        # Trying to visualize probabilities per grid cell
+        plt.figure()
         plt.imshow(dstb_states, cmap='hot')
         plt.colorbar()
         plt.scatter(self.robot_state[1], self.robot_state[0], s=50, c='b')
+
+        # Subplots showing probabilities of individual thetas
+        sorted_ind = np.argsort(dstb)
+        counter = 0
+        while counter < len(dstb):
+            fig, axs = plt.subplots(3, 3)
+            for i in range(3):
+                if counter >= len(dstb):
+                    break
+                for j in range(3):
+                    if counter >= len(dstb):
+                        break
+                    if self.no_goal:
+                        axs[i, j].imshow(self.thetas[sorted_ind[counter]], cmap='hot')
+                    else:
+                        ind = np.where(self.thetas[sorted_ind[counter]] == 1)
+                        theta_show = np.copy(self.thetas[sorted_ind[counter]])
+                        theta_show[ind[0], ind[1]] = 0
+                        theta_show = -theta_show
+                        axs[i, j].imshow(theta_show, cmap='hot')
+
+                    axs[i, j].scatter(self.robot_state[1], self.robot_state[0], s=50, c='b')
+                    axs[i, j].set_title(dstb[sorted_ind[counter]], fontsize = 8)
+
+                    counter += 1
+
         plt.show()
+
+
+        # for i in range(len(dstb)):
+        #     if self.no_goal:
+        #         plt.imshow(self.thetas[i], cmap='hot')
+        #     else:
+        #         ind = np.where(self.thetas[i] == 1)
+        #         theta_show = np.copy(self.thetas[i])
+        #         theta_show[ind[0], ind[1]] = 0
+        #         theta_show = -theta_show
+        #         plt.imshow(theta_show, cmap='hot')
+        #
+        #     plt.scatter(self.robot_state[1], self.robot_state[0], s=50, c='b')
+        #     plt.title(dstb[i])
+        #     plt.show()
+
+
+    def update_thetas(self, goal):
+        self.robot_goal = goal
+        self.thetas = []
+        for obs_size in self.obs_sizes:
+            self.thetas.extend(self.generate_parametrized_thetas(size_obstacle=obs_size))
+
+
+
 
 
 
