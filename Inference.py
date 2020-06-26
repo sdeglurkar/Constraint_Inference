@@ -39,8 +39,17 @@ class Inference:
         for obs_size in obs_sizes:
             self.thetas.extend(self.generate_parametrized_thetas(size_obstacle=obs_size))
 
-        self.prior = np.ones(len(self.thetas))/len(self.thetas)
+        # Empty environment - add to self.thetas only once
+        t = np.zeros((self.grid_size[0], self.grid_size[1]))
+        t[self.robot_goal[0], self.robot_goal[1]] = 1
+        self.thetas.append(t)
 
+        self.prior = np.ones(len(self.thetas))
+        prob_empty_env = 0.5
+        remaining_prob = (1 - prob_empty_env)/(len(self.thetas) - 1)
+        self.prior *= remaining_prob
+        self.prior[-1] = prob_empty_env
+        #self.prior = np.ones(len(self.thetas))/len(self.thetas)
 
 
     def generate_all_thetas(self):
@@ -108,6 +117,7 @@ class Inference:
         t[2, 1] = -1
         t[self.robot_goal[0], self.robot_goal[1]] = 1
         thetas.append(t)
+
 
         return thetas
 
@@ -266,9 +276,9 @@ class Inference:
                     else:
                         val = -1
                     if theta[i][j] == val:
-                        #max_prob += dstb[k]
-                        if dstb[k] > max_prob:
-                            max_prob = dstb[k]
+                        max_prob += dstb[k]
+                        #if dstb[k] > max_prob:
+                        #    max_prob = dstb[k]
                 dstb_states[i][j] = max_prob
 
         # Belief bar chart
